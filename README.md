@@ -70,6 +70,10 @@ of your stack will have a pull request with all the commit below of it. Ask your
 reviewer to only review that single commit, and hope they are fine with that.
 
 # Getting started
+## Installation
+Create a sym-link called `git-review` that points at `git_review.py` and add it
+to your PATH. Then git will find it when you run `git review`.
+
 ## Configuration
 
 Pick a name for your working branch, let's say "stack" and run
@@ -84,10 +88,3 @@ generate a new API token, give the token "repo" rights, and then run
 Finally, run
 
     $ git config --local --add review.user github-user
-
-## Installing dependencies
-
-    $ sudo easy_install pip
-    $ pip install tabulate --user
-    $ pip install requests --user
-"""
