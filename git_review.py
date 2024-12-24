@@ -287,7 +287,7 @@ def new_command(args):
 
 metaVarPattern = re.compile(f"^{META_VAR}=(.*)$")
 
-onelinePattern = re.compile(r"^([^\s]*)\s([0-9]+):\s(.*)$")
+onelinePattern = re.compile(r"^(?P<commit>[^\s]*)\s(?P<wip>wip:\s)?(?P<issue>[0-9]+):\s(?P<message>.*)$")
 
 repoPattern = re.compile(r"^\s*Fetch URL: git@github.com:([^/]*)/([^\.]*).git$")
 
@@ -295,12 +295,13 @@ repoPattern = re.compile(r"^\s*Fetch URL: git@github.com:([^/]*)/([^\.]*).git$")
 class Entry(object):
     """A log entry"""
 
-    def __init__(self, commit, branch, issue, message):
+    def __init__(self, commit, branch, issue, message, wip):
         self.commit = commit
         self.branch = branch
         self.issue = issue
         self.message = message
         self.pull_request = None
+        self.wip = wip
 
 
 def review_branch(commit):
@@ -328,16 +329,22 @@ def listing(config):
                         f'internal error: failed to parse --oneline representation "{line}"'
                     )
                     sys.exit(1)
-                res.append((match_object.group(1), match_object.group(2), match_object.group(3)))
+                res.append(match_object.groupdict())
 
         return res
 
     lst = git(f"log --oneline {config.main}..{config.branch}", out_function=extract)
 
     res = []
-    for (commit, issue, message) in lst:
-        branch = review_branch(commit)
-        res.append(Entry(commit, branch, issue, message))
+    for entry in lst:
+        branch = review_branch(entry["commit"])
+        res.append(Entry(
+            commit=entry["commit"],
+            branch=branch,
+            issue=entry["issue"],
+            message=entry["message"],
+            wip=entry["wip"] is not None
+        ))
     return res
 
 
@@ -375,14 +382,14 @@ def log_command(args):
     """git log of the stack"""
     config = load_all_config()
     if args.pulls:
-        headers = ["commit", "branch", "pull-request", "issue", "message"]
+        headers = ["commit", "branch", "pull-request", "issue", "wip", "message"]
         data = [
-            [e.commit, e.branch, e.pull_request, e.issue, e.message]
+            [e.commit, e.branch, e.pull_request, e.issue, "x" if e.wip else "", e.message]
             for e in augmented_listing(config)
         ]
     else:
-        headers = ["commit", "branch", "issue", "message"]
-        data = [[e.commit, e.branch, e.issue, e.message] for e in listing(config)]
+        headers = ["commit", "branch", "issue", "wip", "message"]
+        data = [[e.commit, e.branch, e.issue, "x" if e.wip else "", e.message] for e in listing(config)]
 
     sys.stdout.write(tabulate.tabulate(reversed(data), headers=headers) + "\n")
 
