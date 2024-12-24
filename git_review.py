@@ -287,7 +287,7 @@ def new_command(args):
 
 metaVarPattern = re.compile(f"^{META_VAR}=(.*)$")
 
-onelinePattern = re.compile(r"^([^\s]*)\s(.*)$")
+onelinePattern = re.compile(r"^([^\s]*)\s([0-9]+):\s(.*)$")
 
 repoPattern = re.compile(r"^\s*Fetch URL: git@github.com:([^/]*)/([^\.]*).git$")
 
@@ -295,11 +295,12 @@ repoPattern = re.compile(r"^\s*Fetch URL: git@github.com:([^/]*)/([^\.]*).git$")
 class Entry(object):
     """A log entry"""
 
-    def __init__(self, commit, branch, message, pull_request):
+    def __init__(self, commit, branch, issue, message):
         self.commit = commit
         self.branch = branch
+        self.issue = issue
         self.message = message
-        self.pull_request = pull_request
+        self.pull_request = None
 
 
 def review_branch(commit):
@@ -327,15 +328,16 @@ def listing(config):
                         f'internal error: failed to parse --oneline representation "{line}"'
                     )
                     sys.exit(1)
-                res.append((match_object.group(1), match_object.group(2)))
+                res.append((match_object.group(1), match_object.group(2), match_object.group(3)))
+
         return res
 
     lst = git(f"log --oneline {config.main}..{config.branch}", out_function=extract)
 
     res = []
-    for (commit, message) in lst:
+    for (commit, issue, message) in lst:
         branch = review_branch(commit)
-        res.append(Entry(commit, branch, message, None))
+        res.append(Entry(commit, branch, issue, message))
     return res
 
 
@@ -373,14 +375,14 @@ def log_command(args):
     """git log of the stack"""
     config = load_all_config()
     if args.pulls:
-        headers = ["commit", "branch", "pull-request", "message"]
+        headers = ["commit", "branch", "pull-request", "issue", "message"]
         data = [
-            [e.commit, e.branch, e.pull_request, e.message]
+            [e.commit, e.branch, e.pull_request, e.issue, e.message]
             for e in augmented_listing(config)
         ]
     else:
-        headers = ["commit", "branch", "message"]
-        data = [[e.commit, e.branch, e.message] for e in listing(config)]
+        headers = ["commit", "branch", "issue", "message"]
+        data = [[e.commit, e.branch, e.issue, e.message] for e in listing(config)]
 
     sys.stdout.write(tabulate.tabulate(reversed(data), headers=headers) + "\n")
 
@@ -398,7 +400,7 @@ def create_pull_request(config, entry):
     payload = json.dumps(
         {
             "title": entry.message,
-            "body": "",
+            "body": f"Closes #{entry.issue}" if entry.issue else "",
             "head": entry.branch,
             "base": config.main,
         }
