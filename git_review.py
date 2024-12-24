@@ -41,16 +41,16 @@ subparsers.add_parser("config", help="print the config")
 
 parser_new = subparsers.add_parser("new", help="create a new commit")
 parser_new.add_argument(
-    "-j",
-    "--jira",
+    "-i",
+    "--issue",
     required=True,
-    help=('Provide the Jira ticket number, or "HOTFIX" if you don\'t have ' "one.\n"),
+    help=("Provide the issue number, or 'HOTFIX' if you don't have one.\n"),
 )
 parser_new.add_argument(
     "-m",
     "--message",
-    required=True,
-    help="Provide the commit message (exluding the Jira prefix)\n",
+    required=False,
+    help="Provide the commit message. Default is to fetch the issue description from GitHub.\n",
 )
 
 parser_log = subparsers.add_parser("log", help="show what is on your stack")
@@ -262,15 +262,21 @@ def new_command(args):
     config = load_all_config()
     ensure_clean_state(config)
 
+    if args.message is None:
+        org = remote_origin(config)
+        message = github(config, f"repos/{org[0]}/{org[1]}/issues/{args.issue}")["title"]
+    else:
+        message = args.message
+
     random.seed()
     tag = "".join(
         random.choice(string.ascii_lowercase + string.digits)
         for _ in range(BRANCH_TAG_LENGTH)
     )
 
-    message = f"""{WIP_TAG}: {args.jira}: {args.message}
+    message = f"""{WIP_TAG}: {args.issue}: {message}
 
-{META_VAR}={args.jira}-{tag}
+{META_VAR}={args.issue}-{tag}
 """
     git("commit --allow-empty -F -", in_stream=message)
 
@@ -392,7 +398,7 @@ def create_pull_request(config, entry):
     payload = json.dumps(
         {
             "title": entry.message,
-            "body": "Please review only the bottom-most commit",
+            "body": "",
             "head": entry.branch,
             "base": config.main,
         }
